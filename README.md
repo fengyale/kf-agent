@@ -1,160 +1,96 @@
+<div align="center">
+
 # kf-agent
 
-三个可独立运行、又能互相引用的本地 AI Agent，覆盖**决策分析**、**深度调研**与**知识库问答**：调研 Agent 回答"世界是什么样"，决策 Agent 回答"你是谁、这条路走不走得通"，知识库把两者的产出沉淀为可检索的语料。
+**三个可独立运行的本地 Java Agent，分别负责决策可行性分析、联网深度调研与本地知识库问答。**
 
-![Java](https://img.shields.io/badge/Java-21-orange)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.5-6DB33F)
-![LangChain4j](https://img.shields.io/badge/LangChain4j-1.4.0%20%7C%201.18.1-blue)
-![License](https://img.shields.io/badge/License-%E6%9C%AA%E5%A3%B0%E6%98%8E-lightgrey)
+[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.5-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![LangChain4j](https://img.shields.io/badge/LangChain4j-1.x-blue)](https://docs.langchain4j.dev/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](#许可证)
 
-## 子项目一览
+</div>
 
-| 项目 | 端口 | 解决什么问题 | 核心机制 | 外部依赖 |
-|---|---|---|---|---|
-| [decision-agent](decision-agent/) | 8089 | "我想做这件事、通过这种方式，可行吗"——结合个人画像与历史执行力给出结构化可行性判断 | 六步分析流程 + 三档情景 A/B/C + 红队质疑‑修订‑复审收敛 | DeepSeek、豆包/博查搜索；只读引用 research.db |
-| [research-agent](research-agent/) | 8088 | 给定调研主题，自主完成多轮检索并产出带引用的调研报告 | 弹性调研循环（模型自主判停）+ 审稿修订闭环 + SSE 实时画布 | DeepSeek、豆包/博查搜索 |
-| [learnkb-rag](learnkb-rag/) | 8090 | 把本地 md/txt 笔记变成可自然语言提问的知识库，回答附来源 | 扫描切块 → 向量化 → 检索召回 → 拼提示词生成 | 本地 Ollama（Embedding） |
+## 三个项目对比
 
-三个项目均为 Java 21 + Spring Boot 3.3.5 + LangChain4j，存储统一用 SQLite（JdbcTemplate 直连，无 ORM）。
+| 项目 | 解决什么问题 | 核心机制 | 端口 |
+|---|---|---|---|
+| [decision-agent](decision-agent/) | "我想做这件事，通过这种方式，可行吗" | 六步可行性循环 + 红蓝对抗 + 预算护栏 + record/replay | 8089 |
+| [research-agent](research-agent/) | 给定主题，自主检索并产出带引用的调研报告 | 多轮检索 + 交叉验证与审稿修订 + SSE 实时推送 | 8088 |
+| [learnkb-rag](learnkb-rag/) | 把本地 md/txt 笔记变成可提问的知识库 | 切分 → embedding → 向量检索 → 生成 | 8090 |
+
+三者均为 Java 21 + Spring Boot 3.3.5 + LangChain4j，数据用 SQLite 落盘，前端为服务端模板页面 + 原生 JS。决策 Agent 与调研 Agent 之间只有一条**单向只读**的数据引用，其余互不依赖。
 
 ---
 
-## 1. decision-agent（决策 Agent，8089）
+## 1. decision-agent（决策参谋，:8089）
 
-**定位**：个人决策参谋。与通用聊天模型的差异不在"更会说"，而在"它知道你"——个人上下文库 + 历史行为数据，让同样的问题得到为你定制的分析。
+**定位**：个人决策可行性分析 Agent。不追求"更会说"，而是结合个人画像与历史执行数据，对"这件事我能不能做成"给出结构化判断。
 
-**工作流程**（六步，可按深度路由升降级）：
+**关键设计**
 
-1. **意图识别**：判断问题类型（学习计划 / 日常事务 / 远期规划 / 商业经营）并选择路径；
-2. **交互采集**：多轮追问补齐时间、资源、历史执行力等槽位，敏感数据在槽位结构化时脱敏；
-3. **可行性评估**：按问题类型取分桶校准系数（冷启动用全局 0.7 并显式标注）修正预期；
-4. **路径设计**：输出乐观 / 现实 / 保守三档情景，各含里程碑、验收标准与降档触发条件；
-5. **差距分析**：对比现状与目标，给出能力缺口与 kill criteria；
-6. **风险与对策**：先跑代码确定性校验（三档单调性、现实档是否按系数修正、周期一致性），再交模型红队，经"质疑 → 修订 → 复审"循环，直到无严重质疑或预算/轮次耗尽。
-
-外部世界信息按三段递进获取：先查 research-agent 已有报告（零成本引用）→ 不足才联网搜索 1~3 条 → 仍不足则提示发起完整调研。成本护栏：单次分析模型调用 ≤ 8 次（deep 路径 12 次）、时长 ≤ 3 分钟。
+- **五阶段流程**：需求收集（多轮追问补齐时间、预算、历史执行力等槽位）→ 意图识别 → 可行性分析循环 → 红蓝对抗校验（红队质疑、修订、复审）→ 报告导出。
+- **预算护栏**：单次分析限制模型调用次数与总时长，超限即收敛并标注降级原因，避免一次请求无限烧额度。
+- **record / replay**：录制真实分析过程，离线回放做回归测试，调 Prompt 或流程后可比对输出差异。
+- **只读跨库引用**：读取 `research-agent/data/research.db` 中已有的调研报告作为事实来源；库不存在时降级为扫描 Markdown 报告目录，再不行才走联网检索。
+- **报告导出**：支持 HTML / Markdown 等格式落盘，写入失败时降级到 `data/reports`。
 
 **启动**：
 
 ```bat
 cd decision-agent
-start.bat                  :: 等价于 mvn -s settings.xml spring-boot:run
+start.bat
 ```
 
-访问 http://localhost:8089 。
-
-**关键配置**（`decision-agent/src/main/resources/application.yml`）：
-
-- `server.port` 默认 8089；
-- `agent.llm.provider`（deepseek / openai-compatible / ollama）、`agent.llm.deepseek.api-key` 取 `${DEEPSEEK_API_KEY:}`；
-- `agent.search.provider`（doubao / bocha）；
-- `agent.budget.maxModelCalls`、`agent.budget.deepMaxModelCalls`、`agent.budget.maxDurationMinutes`、`agent.budget.maxSearchesPerAnalysis`；
-- `agent.data.db-path` 默认 `data/decision.db`；
-- `agent.data.research-db-path` 指向调研报告库（只读，文件不存在时降级）；
-- `agent.data.research-markdown-dir` 为 research.db 不可用时的 Markdown 兜底扫描目录；
-- `agent.report.output-dir` 报告落盘目录，写入失败自动降级到 `data/reports`。
+访问 http://localhost:8089 。详细配置项见 [decision-agent/README.md](decision-agent/README.md)。
 
 ---
 
-## 2. research-agent（调研 Agent，8088）
+## 2. research-agent（调研 Agent，:8088）
 
-**定位**：数据供应商。提交一个主题，它自主决定搜索策略与轮次，综合多源资料产出带引用编号的结构化报告，全过程实时可视化。
+**定位**：研究与数据供应方。提交一个主题，它自主决定检索策略与轮次，产出带引用编号的结构化报告，过程实时可见。
 
-**工作流程**：
+**关键设计**
 
-1. **策略规划**：模型产出本轮搜索计划（关键词与平台定向），可走 web / 知乎 / B 站 / 小红书；
-2. **多轮检索**：豆包为主、博查为备；结果经 RankScore 过滤、去重与标题聚类后入库；
-3. **自主判停**：每轮输出 `enough` 字段决定是否继续；护栏仅在失控时兜底（8 轮 / 30 次搜索 / 20 分钟 / 边际收益不足）；
-4. **审稿修订**：区分 A 类写作缺陷与 B 类原料缺口，B 类触发补搜，修订后复审；
-5. **报告产出**：流式生成 Markdown 报告并落盘语料目录，同时写入 SQLite 供页面回看。
+- **多轮检索**：检索源支持 Doubao 与 Bocha（一主一备），每轮由模型规划关键词，结果经过滤、去重与聚类后入库。
+- **交叉验证与审稿**：区分写作缺陷与原料缺口，缺口触发补充检索，修订后复审，降低单源失真的影响。
+- **SSE 实时推送**：轮次、节点状态、思考过程、审稿意见通过 Server-Sent Events 推到前端，无需轮询。
+- **任务与报告落库**：任务、事件、报告、审稿问题写入 `data/research.db`，重启不丢，可供其它 Agent 只读引用。
+- **弹性判停**：由模型判断信息是否足够，护栏仅在失控时兜底（轮次、搜索次数、时长上限）。
 
 **启动**：
 
 ```bat
 cd research-agent
-start.bat                  :: 等价于 mvn spring-boot:run
+start.bat
 ```
 
-访问 http://localhost:8088 ，提交主题后进入 SSE 实时监控页（轮次泳道、节点状态、思考过程、审稿意见）。
-
-**关键配置**（`research-agent/src/main/resources/application.yml`）：
-
-- `server.port` 默认 8088；
-- `agent.llm.provider`、`agent.llm.deepseek.api-key`（`${DEEPSEEK_API_KEY:}`）；
-- `agent.search.provider`、`agent.search.doubao.api-key`（`${SEARCH_API_KEY:}`）、`agent.search.bocha.api-key`（`${BOCHA_API_KEY:}`）；
-- `agent.budget.maxRounds` / `maxSearchesPerRound` / `maxTotalSearches` / `timeoutMinutes`；
-- `agent.report.output-dir` 报告落盘目录，失败降级到 `data/reports/`。
-
-数据落在 `research-agent/data/research.db`（任务、事件、报告、审稿问题，重启不丢）。
+访问 http://localhost:8088 。详细配置项见 [research-agent/README.md](research-agent/README.md)。
 
 ---
 
-## 3. learnkb-rag（知识库问答，8090）
+## 3. learnkb-rag（本地知识库，:8090）
 
-**定位**：知识沉淀层。递归扫描语料目录下的 `.md` / `.txt`，建向量索引后用自然语言提问，回答附带来源文件。
+**定位**：知识沉淀层。扫描本地笔记目录，建立向量索引后用自然语言提问，回答附带来源片段。
 
-**工作流程**：
+**关键设计**
 
-1. **扫描**：递归读取 `learnkb.corpus-dir` 下的 md/txt；
-2. **切块**：按 `chunk-size` 切分并保留 `chunk-overlap` 重叠；
-3. **向量化**：Embedding 默认走本地 Ollama（默认 `http://127.0.0.1:11434`）；
-4. **入库持久化**：写入 `data/kb-store.json`，启动时自动载入；
-5. **召回生成**：取 `top-k` 命中片段拼提示词，生成回答并回传来源片段。
-
-接口：`POST /api/ingest`（重建索引）、`POST /api/chat`、`POST /api/search`（只检索不生成）、`GET /api/status`。
+- **全链路本地化**：切分与 embedding 使用 Ollama 本地模型，不外传笔记内容。
+- **固定窗口切分**：按 `chunk-size` 切块并保留重叠，减少语义截断。
+- **向量持久化**：索引存入 `data/kb-store.json`，启动时自动载入。
+- **页面重建索引**：笔记更新后在页面上点一下即可重建，无需重启服务。
+- **检索与生成解耦**：除问答外提供纯检索接口，便于核对召回质量。
 
 **启动**：
 
 ```bat
 cd learnkb-rag
-start.bat                  :: 检查/拉起 Ollama 后运行 target\learnkb-rag-1.0.0.jar
+start.bat
 ```
 
-首次需先打包：`mvn -s settings.xml package`。访问 http://localhost:8090 ，笔记更新后在页面点「建立/重建索引」。
-
-**关键配置**（`learnkb-rag/src/main/resources/application.yml`）：
-
-- `server.port` 默认 8090；
-- `learnkb.corpus-dir` 语料目录、`learnkb.store-file` 向量库文件（默认 `data/kb-store.json`）；
-- `learnkb.chunk-size` / `learnkb.chunk-overlap` / `learnkb.top-k`；
-- `learnkb.embedding.provider`（ollama / openai-compatible）与 `learnkb.embedding.ollama.base-url`；
-- `learnkb.chat.provider`（ollama / deepseek / openai-compatible）：默认 `deepseek`，改 `ollama` 即可全离线。
+首次需先 `mvn -s settings.xml package`，脚本会在检查/拉起 Ollama 后运行 jar。访问 http://localhost:8090 。详细配置项见 [learnkb-rag/README.md](learnkb-rag/README.md)。
 
 ---
-
-## 快速开始
-
-### 1. 环境要求
-
-- **JDK 21**（系统默认 JDK 8 会导致编译失败，`start.bat` 内已设置 `JAVA_HOME`，按本机路径调整）
-- **Maven 3.9+**
-- **Ollama**（可选；仅 learnkb-rag 的 Embedding 需要，`start.bat` 会自动检测并拉起）
-
-### 2. 配置环境变量（新开窗口生效）
-
-```bat
-setx DEEPSEEK_API_KEY "your-key"    :: 三个项目的 LLM，主
-setx SEARCH_API_KEY "your-key"      :: 豆包搜索（主）
-setx BOCHA_API_KEY "your-key"       :: 博查搜索（备）
-```
-
-切换到其它提供方时可选：`ARK_API_KEY`（豆包方舟 OpenAI 兼容）、`SILICONFLOW_API_KEY`（learnkb 云端 Embedding）。
-
-### 3. 启动
-
-三个服务端口互不冲突，可同时运行：
-
-```bat
-cd decision-agent && start.bat
-cd research-agent && start.bat
-cd learnkb-rag    && start.bat
-```
-
-| 服务 | 地址 |
-|---|---|
-| 决策 Agent | http://localhost:8089 |
-| 调研 Agent | http://localhost:8088 |
-| 知识库问答 | http://localhost:8090 |
 
 ## 项目关系
 
@@ -164,56 +100,54 @@ flowchart LR
     U --> R["research-agent<br/>:8088"]
     U --> K["learnkb-rag<br/>:8090"]
 
-    R -->|写入| DB[("data/research.db")]
-    D -->|"只读跨库引用（缺失则降级）"| DB
+    R -->|"写入任务 / 报告 / 审稿记录"| DB[("research-agent/data/research.db")]
+    D -->|"只读跨库引用<br/>缺失则降级"| DB
 
-    R -->|报告落盘| MD[("Markdown 语料目录")]
+    R -->|报告落盘| MD[("Markdown 报告目录")]
     D -->|报告落盘| MD
-    MD -->|"扫描 → 切块 → 向量化"| K
-
-    DS[DeepSeek API] --- D
-    DS --- R
-    DS --- K
-    S[豆包 / 博查搜索] --- D
-    S --- R
-    O[Ollama :11434] --- D
-    O --- K
+    MD -->|"扫描 → 切分 → 向量化"| K
 ```
 
-- **decision-agent → research-agent**：只读取 `research-agent/data/research.db` 做零成本报告引用；库不存在或无 report 表时降级为扫描 Markdown 报告目录，再不行才联网。
-- **learnkb-rag**：完全独立运行，不调用其它两个服务；两个 Agent 的报告落盘到语料目录后，重建索引即可被检索到。
-- **共享资源**：搜索额度为账号级共享（同一池子），测试时注意消耗。
+- **decision-agent → research-agent**：单向只读。决策 Agent 只查 `research.db`，从不写入；文件不存在或无报告表时降级扫描 Markdown，两者都不可用才联网。
+- **learnkb-rag**：不调用其它两个服务。把两个 Agent 的报告目录作为语料，重建索引后即可检索。
+
+## 环境要求
+
+| 依赖 | 要求 | 说明 |
+|---|---|---|
+| JDK | 21 | 低于 21 无法编译，`start.bat` 内可指定 `JAVA_HOME` |
+| Maven | 3.9+ | 各子项目附带 `settings.xml`，可按需改镜像与本地仓库 |
+| Ollama | 可选 | 仅 learnkb-rag 的 embedding 需要，默认 `http://127.0.0.1:11434` |
+| LLM / 搜索 API Key | 按需 | 通过环境变量注入，配置文件中只保留 `${...}` 占位符 |
 
 ## 目录结构
 
 ```
 kf-agent/
-├── decision-agent/              # 决策参谋，:8089
-│   ├── src/main/java/com/decision/   # loop 六步编排+红队、collector 采集、external 报告引用、export 导出
-│   ├── src/main/resources/      # application.yml、Thymeleaf 模板与静态资源
-│   ├── settings.xml             # Maven 镜像与本地仓库配置
+├── decision-agent/          # 决策参谋，:8089
+│   ├── src/main/java/com/decision/
+│   ├── src/main/resources/   # application.yml、页面模板
 │   ├── start.bat
 │   └── README.md
-├── research-agent/              # 调研 Agent，:8088
-│   ├── src/main/java/com/research/   # ResearchLoop 弹性循环、ReviewService 审稿修订
+├── research-agent/          # 调研 Agent，:8088
+│   ├── src/main/java/com/research/
 │   ├── src/main/resources/
 │   ├── start.bat
 │   └── README.md
-├── learnkb-rag/                 # RAG 知识库，:8090
-│   ├── src/main/java/com/learnkb/    # config 模型装配、service 切块/检索、controller REST
-│   ├── settings.xml
+├── learnkb-rag/             # 本地知识库，:8090
+│   ├── src/main/java/com/learnkb/
+│   ├── src/main/resources/
 │   ├── start.bat
 │   └── README.md
 └── .gitignore
 ```
 
-## 配置与密钥
+## 运行数据与构建产物
 
-- 所有 API Key 通过**环境变量**注入，代码与配置中只出现 `${DEEPSEEK_API_KEY:}` 这类占位符，无硬编码密钥。
-- `data/`（SQLite 库、报告、向量库）、`recordings/`、`*.log`、`.env`、`application-local.yml` 已在 `.gitignore` 中排除，请勿提交；尤其不要把 `research-agent/data/research.db` 等 `*.db` 提交（可能含个人调研内容）。
-- 报告落盘目录与语料目录默认指向本机笔记路径，克隆后请按需修改 `agent.report.output-dir`、`agent.data.research-markdown-dir`、`learnkb.corpus-dir`。
-- 修改 `application.yml` 必须重启服务生效（Spring Boot 不热加载）；前端静态资源改动需同步到 `target/classes`。
+- 各子项目的 `data/`（SQLite 库、报告、向量索引）属于运行时数据，已在 `.gitignore` 中排除，克隆后首次运行会自动生成。其中可能含个人内容，**不要提交**。
+- `target/` 为 Maven 构建产物，同样已排除。
+- API Key 全部走环境变量；`*.log`、`.env`、`application-local.yml` 一类本地覆盖配置不入库。
 
 ## 许可证
 
-本仓库及三个子项目均**暂未声明许可证**。如需对外复用，请先补充 LICENSE 文件。
+本仓库及三个子项目采用 **MIT License** 授权（仓库内未附带 `LICENSE` 文件，以此声明为准）。
