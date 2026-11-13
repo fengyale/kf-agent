@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分析历史 · 决策参谋</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" th:href="@{/css/theme.css}">
+</head>
+<body class="theme-paper min-h-screen flex flex-col">
+<div class="max-w-5xl mx-auto w-full px-4 py-8 flex-1">
+
+  <!-- ======== 顶栏 ======== -->
+  <header class="flex items-center gap-3 mb-7">
+    <a href="/" class="brand-mark" title="返回首页">决</a>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs" style="color: var(--faint);">决策参谋 · 分析历史库</div>
+      <div class="text-sm" style="color: var(--muted);">回看报告 · 标记进展 · 填写实际结果（预测后验闭环）</div>
+    </div>
+    <a href="/" class="btn-ghost btn-sm">新建分析</a>
+    <a href="/stats" class="btn-ghost btn-sm">统计</a>
+    <a href="/behavior" class="btn-ghost btn-sm">行为数据</a>
+  </header>
+
+  <!-- ======== 统计条 ======== -->
+  <div id="h-stats" class="trace-summary mb-5"></div>
+
+  <!-- ======== 历史列表 ======== -->
+  <div id="h-list" class="space-y-4"></div>
+
+  <!-- ======== 空态 ======== -->
+  <div id="h-empty" class="hidden text-center py-16">
+    <div class="text-4xl mb-3" style="opacity:.4;">🗂</div>
+    <div class="text-sm mb-4" style="color: var(--faint);">还没有分析记录，发起第一次可行性分析吧</div>
+    <a href="/" class="btn-primary">发起分析</a>
+  </div>
+</div>
+
+<script th:src="@{/js/history.js}"></script>
+</body>
+</html>

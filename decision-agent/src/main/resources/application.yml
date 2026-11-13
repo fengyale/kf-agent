@@ -1,0 +1,72 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: decision-agent
+  thymeleaf:
+    cache: false
+
+agent:
+  search:
+    # 搜索提供方：doubao | bocha
+    provider: doubao
+    doubao:
+      api-key: "${SEARCH_API_KEY:}"
+      timeout: 30s
+    bocha:
+      api-key: "${BOCHA_API_KEY:}"
+
+  budget:
+    # 单次分析成本护栏（硬顶）：模型调用 ≤8 次（采集追问+分析+红队+修订合计）、
+    # 时长 ≤3 分钟超时输出已完成部分；搜索按需 1~3 条，优先引用已有调研报告
+    maxModelCalls: 8
+    # 深度路径独立额度：前置 6 步 + 最多 3 轮质疑 + 2 次修订 = 11，另留 1 次给解析重试（默认 12）；
+    # 仅对 depth=deep 生效（light/standard 仍受 maxModelCalls 约束）
+    deepMaxModelCalls: 12
+    maxDurationMinutes: 3
+    maxSearchesPerAnalysis: 3
+    countPerSearch: 5
+
+  llm:
+    # 模型提供方：deepseek | openai-compatible | ollama（ollama 仅应急降级）
+    provider: deepseek
+    deepseek:
+      base-url: "https://api.deepseek.com"
+      api-key: "${DEEPSEEK_API_KEY:}"
+      model: "deepseek-flash"
+      temperature: 0.3
+    openai-compatible:
+      base-url: "https://ark.cn-beijing.volces.com/api/v3"
+      api-key: "${ARK_API_KEY:}"
+      model: "doubao-seed-1-6-flash-250428"
+      temperature: 0.3
+    ollama:
+      base-url: "http://localhost:11434"
+      model: "qwen3.5:2b"
+      temperature: 0.3
+    # 测试录放：record-mode=true 时每次真实调用的请求/响应按调用序号存 recordings-dir；
+    # replay-mode=true 时按序号读录制文件直接回放，不真调模型（模板迭代回归基线）
+    record-mode: false
+    replay-mode: false
+    recordings-dir: "data/recordings"
+
+  report:
+    # 分析报告落盘目录（learnkb 语料目录，实现知识回流；F 盘失败降级 data/reports）
+    output-dir: "F:\\learn\\ai转型计划个人学习\\decision-agent决策分析"
+
+  data:
+    # 决策 Agent 主库
+    db-path: "data/decision.db"
+    # 调研 Agent 报告库（只读跨库引用，供 ReportReferralService 零成本引用；文件不存在时降级）
+    research-db-path: "D:/workspace/kf-agent/research-agent/data/research.db"
+    # 调研报告 Markdown 目录（research.db 不存在/无 report 表时的降级扫描源，读文件头/首行标题做关键词匹配）
+    research-markdown-dir: "F:\\learn\\ai转型计划个人学习\\research-agent调研报告"
+
+logging:
+  # 控制台输出用 GBK，配合 start.bat 的 cmd 窗口显示中文不乱码（IDEA 里看日志会乱码，属正常取舍）
+  charset:
+    console: GBK
+  level:
+    dev.langchain4j: INFO
+    com.decision: DEBUG

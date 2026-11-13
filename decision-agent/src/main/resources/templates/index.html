@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>决策参谋 · 个人决策可行性分析</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" th:href="@{/css/theme.css}">
+</head>
+<body class="theme-paper min-h-screen flex flex-col">
+
+  <!-- ======== 顶部导航栏 ======== -->
+  <header class="px-4 md:px-6 py-3 border-b"
+          style="border-color: var(--border); background: var(--panel);">
+    <div class="max-w-5xl mx-auto flex items-center gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="brand-mark" style="width:32px;height:32px;font-size:15px;">决</span>
+        <span class="text-sm font-semibold truncate" style="color: var(--ink);">决策参谋</span>
+      </div>
+      <nav class="ml-auto flex items-center gap-1.5 flex-shrink-0">
+        <a href="/history" class="btn-ghost btn-sm" title="分析历史库 · 回看报告 · 填实际结果">分析历史</a>
+        <a href="/stats" class="btn-ghost btn-sm" title="高频缺陷分布 · 完成率趋势 · 调用明细">统计</a>
+        <a href="/behavior" class="btn-ghost btn-sm" title="录入真实行为记录，校准三档情景的乐观偏差">行为数据</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="flex flex-col items-center justify-center flex-1 px-4 py-10">
+
+    <!-- ======== 品牌区 ======== -->
+    <div class="flex flex-col items-center mb-8">
+      <div class="brand-mark mb-4" style="width:56px;height:56px;font-size:26px;">决</div>
+      <h1 class="text-3xl serif-title">决策参谋</h1>
+      <p class="text-sm mt-3" style="color: var(--muted);">
+        个人决策可行性分析 · 六步流程 · 三档情景 · 风险与对策
+      </p>
+    </div>
+
+    <!-- ======== 提问输入卡 ======== -->
+    <div class="w-full max-w-2xl masthead" style="padding: 24px 28px;">
+      <label for="question" class="block text-sm font-semibold mb-3" style="color: var(--ink);">
+        你想做什么决定？
+      </label>
+      <textarea id="question" class="field" rows="3"
+        placeholder="例如：我想在 6 个月内转型 AI 应用开发，每周能投入 10 小时，可行吗？"></textarea>
+
+      <!-- 深度选择：自动（默认）/ 轻量 / 标准 / 深度 -->
+      <div class="flex items-center flex-wrap gap-2 mt-4">
+        <span class="text-xs mr-1" style="color: var(--faint);">分析深度</span>
+        <div id="depth-pills" class="flex flex-wrap gap-2">
+          <button type="button" class="btn-ghost depth-pill active" data-depth="" data-active="1">自动</button>
+          <button type="button" class="btn-ghost depth-pill" data-depth="light">轻量</button>
+          <button type="button" class="btn-ghost depth-pill" data-depth="standard">标准</button>
+          <button type="button" class="btn-ghost depth-pill" data-depth="deep">深度</button>
+        </div>
+        <span class="text-xs ml-auto hidden md:inline" style="color: var(--faint);">日常事务自动走轻量路径，1~2 次调用出结论</span>
+      </div>
+
+      <div class="flex items-center gap-3 mt-6">
+        <button id="btn-start" class="btn-primary">开始分析 →</button>
+        <span id="start-error" class="text-xs" style="color: var(--danger);"></span>
+      </div>
+    </div>
+
+    <!-- ======== 示例问题 ======== -->
+    <div class="w-full max-w-2xl mt-5">
+      <p class="text-xs mb-2" style="color: var(--faint);">试试这些</p>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn-ghost sug" data-q="我想转行做 AI 产品经理，下半年来得及吗？">转行 AI 产品经理</button>
+        <button class="btn-ghost sug" data-q="这两周要不要买一个 800 元的机械键盘？">买不买新键盘</button>
+        <button class="btn-ghost sug" data-q="我想开一家社区咖啡店，投入约 30 万，可行吗？">开社区咖啡店</button>
+        <button class="btn-ghost sug" data-q="明年要不要考一个在职研究生？">在职考研</button>
+      </div>
+    </div>
+
+    <!-- ======== 首访画像引导（GET /api/profile 判定后显示） ======== -->
+    <div id="guidance-wrap" class="w-full max-w-2xl mt-6 hidden">
+      <div class="report-card">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="!mb-0">初次见面，先认识你</h3>
+          <button id="btn-skip-guidance" class="btn-ghost btn-sm">跳过</button>
+        </div>
+        <p class="text-xs mb-4" style="color: var(--faint);">
+          回答几个基础问题，让分析更贴合你的实际情况（随时可跳过，之后不再弹出）
+        </p>
+        <div id="guidance-questions" class="space-y-4"></div>
+        <div class="flex items-center gap-3 mt-5">
+          <button id="btn-save-guidance" class="btn-primary btn-sm">保存画像</button>
+          <span id="guidance-msg" class="text-xs" style="color: var(--faint);"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="pb-6 text-center">
+    <p class="text-xs" style="color: var(--faint);">决策参谋 v1 · 分析仅供参考，「该不该做」的决策权在你</p>
+  </footer>
+
+  <script th:src="@{/js/index.js}"></script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>调研数据 · AI 调研 Agent</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #162032; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --faint: #64748b;
+    --purple: #7c3aed; --purple-l: #a78bfa; --blue: #3b82f6; --green: #10b981;
+    --red: #ef4444; --amber: #f59e0b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .topbar { background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 50; }
+  .topbar a.back { color: var(--purple-l); text-decoration: none; font-size: 13px; }
+  .brand { font-weight: 700; font-size: 15px; color: var(--purple-l); }
+  .topbar .sp { flex: 1; }
+  .refresh { font-size: 12px; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); cursor: pointer; }
+  .refresh:hover { border-color: var(--purple); }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat .num { font-size: 24px; font-weight: 700; color: var(--purple-l); }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .stat.g .num { color: #6ee7b7; }
+  .stat.b .num { color: #93c5fd; }
+  .stat.r .num { color: #fca5a5; }
+  .stat.a .num { color: #fcd34d; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; }
+  .card h2 { font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+
+  .filter-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .filter-tabs button { font-size: 12px; padding: 4px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
+  .filter-tabs button.active { background: rgba(124,58,237,.2); color: var(--purple-l); border-color: var(--purple); }
+
+  table.tasks { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.tasks th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.tasks td { padding: 10px; border-bottom: 1px solid var(--panel2); vertical-align: top; }
+  table.tasks tr:hover td { background: rgba(124,58,237,.05); }
+  table.tasks .topic { color: var(--text); max-width: 380px; }
+  table.tasks .muted { color: var(--muted); white-space: nowrap; }
+  .chip { font-size: 11px; padding: 3px 10px; border-radius: 10px; background: var(--panel2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+  .chip.running { background: rgba(59,130,246,.15); color: #93c5fd; border-color: rgba(59,130,246,.4); animation: pulse 1.6s infinite; }
+  .chip.done { background: rgba(16,185,129,.15); color: #6ee7b7; border-color: rgba(16,185,129,.4); }
+  .chip.failed { background: rgba(239,68,68,.15); color: #fca5a5; border-color: rgba(239,68,68,.4); }
+  .chip.cancelled { color: var(--faint); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+  .act { font-size: 11.5px; padding: 3px 11px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--purple-l); cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .act:hover { border-color: var(--purple); background: rgba(124,58,237,.1); }
+  .empty { color: var(--faint); font-size: 13px; text-align: center; padding: 30px 0; }
+
+  .issue { font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.3); color: var(--text); }
+  .issue .tag { display: inline-block; font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-right: 8px; color: #0f172a; font-weight: 700; background: var(--amber); }
+  .issue .tag.b { background: #fb923c; }
+  .issue .tid { color: var(--amber); font-size: 11px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="back" href="/">← 返回对话</a>
+  <span class="brand">📊 调研数据与统计</span>
+  <span class="sp"></span>
+  <button class="refresh" onclick="loadAll()">刷新</button>
+</div>
+
+<div class="wrap">
+  <div class="stats-row" id="stats-row">
+    <div class="stat"><div class="num">-</div><div class="lbl">累计调研任务</div></div>
+  </div>
+
+  <div class="card">
+    <h2>🗂 历史任务</h2>
+    <div class="filter-tabs" id="filter-tabs">
+      <button data-f="all" class="active">全部</button>
+      <button data-f="running">运行中</button>
+      <button data-f="done">已完成</button>
+      <button data-f="failed">失败/终止</button>
+    </div>
+    <div id="tasks"></div>
+  </div>
+
+  <div class="card">
+    <h2>🔍 质量审稿统计</h2>
+    <div id="issues"></div>
+  </div>
+</div>
+
+<script>
+  let allTasks = [];
+  let filter = 'all';
+
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function fmtCost(ms) { if (!ms) return '-'; const s = Math.round(ms / 1000); return s >= 60 ? Math.floor(s / 60) + '分' + (s % 60) + '秒' : s + '秒'; }
+  const ST_TEXT = { running: '运行中', done: '已完成', failed: '失败', cancelled: '已终止' };
+
+  async function loadTasks() {
+    try {
+      const list = await (await fetch('/api/research')).json();
+      if (Array.isArray(list)) allTasks = list;
+    } catch (e) { /* 保留旧数据 */ }
+    renderStats();
+    renderTasks();
+  }
+
+  function renderStats() {
+    const total = allTasks.length;
+    const run = allTasks.filter((t) => t.status === 'running').length;
+    const done = allTasks.filter((t) => t.status === 'done').length;
+    const bad = allTasks.filter((t) => t.status === 'failed' || t.status === 'cancelled').length;
+    const rounds = allTasks.reduce((a, t) => a + (t.rounds || 0), 0);
+    const searches = allTasks.reduce((a, t) => a + (t.search_count || 0), 0);
+    document.getElementById('stats-row').innerHTML =
+      '<div class="stat"><div class="num">' + total + '</div><div class="lbl">累计调研任务</div></div>'
+      + '<div class="stat b"><div class="num">' + run + '</div><div class="lbl">进行中</div></div>'
+      + '<div class="stat g"><div class="num">' + done + '</div><div class="lbl">已完成</div></div>'
+      + '<div class="stat r"><div class="num">' + bad + '</div><div class="lbl">失败/终止</div></div>'
+      + '<div class="stat"><div class="num">' + rounds + '</div><div class="lbl">累计搜索轮次</div></div>'
+      + '<div class="stat"><div class="num">' + searches + '</div><div class="lbl">累计检索次数</div></div>';
+  }
+
+  function renderTasks() {
+    const box = document.getElementById('tasks');
+    const rows = allTasks.filter((t) => filter === 'all'
+      || (filter === 'running' && t.status === 'running')
+      || (filter === 'done' && t.status === 'done')
+      || (filter === 'failed' && (t.status === 'failed' || t.status === 'cancelled')));
+    if (!rows.length) { box.innerHTML = '<div class="empty">暂无任务</div>'; return; }
+    box.innerHTML = '<table class="tasks"><tr><th>主题</th><th>状态</th><th>轮次</th><th>检索</th><th>耗时</th><th>创建时间</th><th>操作</th></tr>'
+      + rows.map((t) => {
+        const st = t.status || 'running';
+        return '<tr>'
+          + '<td class="topic">' + esc(t.topic) + '</td>'
+          + '<td><span class="chip ' + st + '">' + (ST_TEXT[st] || st) + '</span></td>'
+          + '<td class="muted">' + (t.rounds || 0) + '</td>'
+          + '<td class="muted">' + (t.search_count || 0) + '</td>'
+          + '<td class="muted">' + fmtCost(t.total_cost_ms) + '</td>'
+          + '<td class="muted">' + esc((t.created_at || '').slice(5, 16)) + '</td>'
+          + '<td><a class="act" href="/monitor/' + encodeURIComponent(t.id) + '">监控</a>'
+          + (st === 'done' ? ' <a class="act" href="/api/research/' + encodeURIComponent(t.id) + '/report/download">下载</a>' : '')
+          + '</td></tr>';
+      }).join('') + '</table>';
+  }
+
+  async function loadStats() {
+    try {
+      const s = await (await fetch('/api/research/stats')).json();
+      const stats = s.reviewStats || [];
+      const aCnt = (stats.find((x) => (x.type || '').toUpperCase() === 'A') || {}).cnt || 0;
+      const bCnt = (stats.find((x) => (x.type || '').toUpperCase() === 'B') || {}).cnt || 0;
+      document.getElementById('issues').innerHTML =
+        '<div class="stats-row" style="margin-bottom:12px">'
+        + '<div class="stat a"><div class="num">' + aCnt + '</div><div class="lbl">A类 · 写作缺陷</div></div>'
+        + '<div class="stat a"><div class="num">' + bCnt + '</div><div class="lbl">B类 · 原料缺口</div></div></div>'
+        + (s.recentIssues || []).map((i) => {
+          const type = (i.type || 'A').toUpperCase();
+          return '<div class="issue"><span class="tag ' + (type === 'B' ? 'b' : '') + '">' + type + '类</span>'
+            + esc(i.description) + '<span class="tid">' + esc(i.task_id) + ' · ' + esc(i.created_at || '') + '</span></div>';
+        }).join('') || '<div class="empty">暂无审稿记录</div>';
+    } catch (e) { /* 静默 */ }
+  }
+
+  document.getElementById('filter-tabs').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button');
+    if (!btn) return;
+    filter = btn.dataset.f;
+    document.querySelectorAll('#filter-tabs button').forEach((b) => b.classList.toggle('active', b === btn));
+    renderTasks();
+  });
+
+  function loadAll() { loadTasks(); loadStats(); }
+  loadAll();
+  setInterval(loadAll, 15000);
+</script>
+</body>
+</html>

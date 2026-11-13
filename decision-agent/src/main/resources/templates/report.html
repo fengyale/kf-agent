@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>可行性报告 · 决策参谋</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" th:href="@{/css/theme.css}">
+</head>
+<body class="theme-paper min-h-screen flex flex-col" th:attr="data-analysis-id=${analysisId}">
+<div class="max-w-4xl mx-auto w-full px-4 py-8 flex-1">
+
+  <!-- ======== 顶栏 ======== -->
+  <header class="flex items-center gap-3 mb-6">
+    <a href="/" class="brand-mark" title="返回首页">决</a>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs" style="color: var(--faint);">决策参谋 · 可行性报告</div>
+      <div class="text-sm" style="color: var(--muted);">仅供参考，「该不该做」的决策权在你</div>
+    </div>
+    <a href="/history" class="btn-ghost btn-sm" title="分析历史库">历史</a>
+    <a href="/stats" class="btn-ghost btn-sm" title="统计页 · 高频缺陷/完成率趋势/调用明细">统计</a>
+    <a href="/behavior" class="btn-ghost btn-sm" title="行为数据 · 分桶校准">行为数据</a>
+    <button id="btn-rerun" class="btn-primary btn-sm">重新分析</button>
+  </header>
+
+  <!-- ======== 报头 ======== -->
+  <section class="masthead mb-4">
+    <div class="mh-kicker">
+      <b>可行性分析报告</b><span aria-hidden="true">·</span>
+      <span th:text="${analysisId}">—</span>
+    </div>
+    <h1 id="r-title">加载中…</h1>
+    <div id="r-chips" class="flex flex-wrap gap-2 mt-4"></div>
+  </section>
+
+  <!-- ======== 工具条：调用摘要 + 导出 ======== -->
+  <div class="flex flex-col gap-3 mb-6">
+    <div id="r-trace" class="trace-summary"></div>
+    <div id="r-export" class="hidden flex flex-wrap items-center gap-2">
+      <span class="text-xs" style="color: var(--faint);">导出：</span>
+      <a class="btn-ghost btn-sm" data-format="md" title="Markdown 存档 / learnkb 回流">MD</a>
+      <a class="btn-ghost btn-sm" data-format="xlsx" title="三档对比/里程碑/周投入排期/风险清单（可编辑）">Excel</a>
+      <a class="btn-ghost btn-sm" data-format="pdf" title="报告直转 PDF（打印/存档/转发）">PDF</a>
+      <a class="btn-ghost btn-sm" data-format="docx" title="Word 结构化文档（正式场合发送）">Word</a>
+      <a class="btn-primary btn-sm" data-format="bundle" title="zip 打包：MD + xlsx + pdf + docx 四件">打包下载</a>
+    </div>
+  </div>
+
+  <!-- ======== 首屏区：结论 / 三档矩阵 / 第四档（JS 渲染） ======== -->
+  <main id="r-primary" class="space-y-5"></main>
+
+  <!-- ======== 明细折叠区：路径差距 / 风险红队 / 附录 / 过程明细（JS 渲染） ======== -->
+  <div id="r-secondary" class="space-y-4 mt-6"></div>
+
+  <!-- ======== 尾注：决策权在你 ======== -->
+  <footer class="report-footer">
+    <div class="t">决 策 权 在 你</div>
+    <div class="s" id="r-footer-note">分析基于当前信息与假设生成，仅供参考；「该不该做」始终由你决定。</div>
+  </footer>
+</div>
+
+<script th:src="@{/js/report.js}"></script>
+</body>
+</html>

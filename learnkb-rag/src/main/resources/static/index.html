@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习知识库问答</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f3f4f8;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+  }
+  .app { width: 100%; max-width: 860px; padding: 24px 16px; display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  header h1 { font-size: 20px; color: #1f2333; }
+  .status { font-size: 12px; padding: 4px 10px; border-radius: 12px; background: #e5e7f0; color: #555; }
+  .status.ok { background: #dcfce7; color: #166534; }
+  .status.bad { background: #fee2e2; color: #991b1b; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+  .toolbar button {
+    padding: 6px 14px; border: 1px solid #c9cde0; border-radius: 8px;
+    background: #fff; color: #333; font-size: 13px; cursor: pointer;
+  }
+  .toolbar button:hover { background: #eef0fa; }
+  #ingestBtn:disabled { opacity: .5; cursor: wait; }
+  #log { font-size: 12px; color: #6b7280; margin-bottom: 8px; min-height: 16px; }
+  #chat { flex: 1; overflow-y: auto; background: #fff; border: 1px solid #e2e5f0; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 88%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: #4f46e5; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: #f1f2f7; color: #1f2333; border-bottom-left-radius: 4px; }
+  .msg .src { display: block; margin-top: 8px; font-size: 12px; color: #6b7280; }
+  .think { border-left: 3px solid #c7cbe4; margin-bottom: 8px; font-size: 13px; color: #8a8fa3; }
+  .think .tlabel { cursor: pointer; user-select: none; color: #7c81a3; font-size: 12px; padding: 2px 0; }
+  .think .tbody { white-space: pre-wrap; word-break: break-word; padding: 6px 0 6px 10px; max-height: 300px; overflow-y: auto; }
+  .think.collapsed .tbody { display: none; }
+  .think .tlabel .arrow { display: inline-block; transition: transform .15s; margin-right: 4px; }
+  .think.collapsed .tlabel .arrow { transform: rotate(-90deg); }
+  .msg.bot .cursor { display: inline-block; width: 7px; height: 15px; background: #4f46e5; margin-left: 2px; vertical-align: -2px; animation: blink 0.8s infinite; border-radius: 1px; }
+  @keyframes blink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
+  .msg.bot h1, .msg.bot h2, .msg.bot h3 { font-size: 15px; margin: 8px 0 4px; }
+  .msg.bot ul, .msg.bot ol { padding-left: 20px; margin: 4px 0; }
+  .msg.bot code { background: #e6e8f4; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .msg.bot pre { background: #e6e8f4; padding: 8px 10px; border-radius: 8px; overflow-x: auto; margin: 6px 0; }
+  .msg.bot pre code { background: none; padding: 0; }
+  .msg.bot strong { font-weight: 600; }
+  .msg.bot p { margin: 4px 0; }
+  .hint { color: #9ca3af; font-size: 13px; text-align: center; margin-top: auto; margin-bottom: auto; }
+  .inputbar { display: flex; gap: 8px; margin-top: 12px; }
+  .inputbar textarea {
+    flex: 1; resize: none; padding: 10px 14px; border: 1px solid #c9cde0;
+    border-radius: 10px; font-size: 14px; font-family: inherit; height: 48px; outline: none;
+  }
+  .inputbar textarea:focus { border-color: #4f46e5; }
+  .inputbar button {
+    padding: 0 24px; border: none; border-radius: 10px; background: #4f46e5;
+    color: #fff; font-size: 14px; cursor: pointer;
+  }
+  .inputbar button:disabled { opacity: .5; cursor: wait; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>📚 学习知识库问答</h1>
+    <span id="status" class="status bad">检查中…</span>
+  </header>
+  <div class="toolbar">
+    <button id="ingestBtn" onclick="doIngest()">建立/重建索引</button>
+    <button onclick="refreshStatus()">刷新状态</button>
+  </div>
+  <div id="log"></div>
+  <div id="chat">
+    <div class="hint" id="hint">先点「建立/重建索引」扫描语料目录，然后提问<br>例如：MoE 的门控路由是怎么工作的？</div>
+  </div>
+  <div class="inputbar">
+    <textarea id="q" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+    <button id="sendBtn" onclick="doAsk()">发送</button>
+  </div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+
+  async function refreshStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const s = await r.json();
+      const el = $('status');
+      if (s.indexed) {
+        el.textContent = `已索引 ${s.segmentCount} 个文本块`;
+        el.className = 'status ok';
+        $('hint').style.display = 'none';
+      } else {
+        el.textContent = '未建立索引';
+        el.className = 'status bad';
+      }
+    } catch (e) {
+      $('status').textContent = '服务异常';
+      $('status').className = 'status bad';
+    }
+  }
+
+  async function doIngest() {
+    $('ingestBtn').disabled = true;
+    $('log').textContent = '正在扫描语料、切块并生成向量，请稍候…';
+    try {
+      const r = await fetch('/api/ingest', { method: 'POST' });
+      const s = await r.json();
+      if (s.error) { $('log').textContent = '失败：' + s.error; return; }
+      $('log').textContent = `索引完成：${s.fileCount} 个文件 → ${s.segmentCount} 个文本块，耗时 ${(s.costMs / 1000).toFixed(1)} 秒`;
+      $('hint').style.display = 'none';
+      refreshStatus();
+    } catch (e) {
+      $('log').textContent = '失败：' + e.message;
+    } finally {
+      $('ingestBtn').disabled = false;
+    }
+  }
+
+  function addMsg(cls, html) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + cls;
+    div.innerHTML = html;
+    $('chat').appendChild(div);
+    $('chat').scrollTop = $('chat').scrollHeight;
+    return div;
+  }
+
+  async function doAsk() {
+    const q = $('q').value.trim();
+    if (!q) return;
+    $('q').value = '';
+    addMsg('user', q);
+
+    const bot = addMsg('bot', '');
+    const think = document.createElement('div');
+    think.className = 'think';
+    think.innerHTML = '<div class="tlabel"><span class="arrow">▾</span>思考中…</div><div class="tbody"></div>';
+    think.querySelector('.tlabel').onclick = () => think.classList.toggle('collapsed');
+    bot.appendChild(think);
+    const tBody = think.querySelector('.tbody');
+    const tLabel = think.querySelector('.tlabel');
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    bot.appendChild(cursor);
+    $('sendBtn').disabled = true;
+    let full = '';
+    let thinkText = '';
+    let sources = [];
+    try {
+      const resp = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q })
+      });
+      if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const events = buf.split('\n\n');
+        buf = events.pop();
+        for (const ev of events) {
+          const nameM = ev.match(/^event:(.+)$/m);
+          const dataM = ev.match(/^data:(.*)$/m);
+          if (!dataM) continue;
+          const name = nameM ? nameM[1].trim() : 'message';
+          let data;
+          try { data = JSON.parse(dataM[1].trim()); } catch { data = dataM[1]; }
+          if (name === 'thinking') {
+            thinkText += data;
+            tBody.textContent = thinkText;
+            tBody.scrollTop = tBody.scrollHeight;
+            tLabel.innerHTML = '<span class="arrow">▾</span>思考中…';
+            $('chat').scrollTop = $('chat').scrollHeight;
+          } else if (name === 'token') {
+            if (thinkText && !think.classList.contains('collapsed')) {
+              think.classList.add('collapsed');
+              tLabel.innerHTML = `<span class="arrow">▸</span>已思考（${thinkText.length} 字，点击展开）`;
+            }
+            full += data;
+            bot.innerHTML = '';
+            bot.appendChild(think);
+            const span = document.createElement('span');
+            span.innerHTML = renderMd(full);
+            bot.appendChild(span);
+            bot.appendChild(cursor);
+            $('chat').scrollTop = $('chat').scrollHeight;
+          } else if (name === 'done') {
+            full = data.answer || full;
+            sources = data.sources || [];
+          } else if (name === 'error') {
+            const errMsg = typeof data === 'object'
+              ? (data.message || data.error?.message || data.error || JSON.stringify(data))
+              : String(data);
+            full += (full ? '\n\n' : '') + '出错了：' + errMsg;
+          }
+        }
+      }
+      if (!thinkText) think.remove();
+      const src = sources.length ? `<span class="src">📎 来源：${sources.map(s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;')).join('、')}</span>` : '';
+      const finalSpan = document.createElement('span');
+      finalSpan.innerHTML = renderMd(full) + src;
+      bot.innerHTML = '';
+      if (thinkText) bot.appendChild(think);
+      bot.appendChild(finalSpan);
+    } catch (e) {
+      bot.innerHTML = '请求失败：' + e.message;
+    } finally {
+      $('sendBtn').disabled = false;
+      $('chat').scrollTop = $('chat').scrollHeight;
+    }
+  }
+
+  function renderMd(text) {
+    const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    return esc
+      .replace(/```([\s\S]*?)```/g, (_, code) => '<pre><code>' + code.trim() + '</code></pre>')
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>')
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+  }
+
+  $('q').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doAsk(); }
+  });
+
+  refreshStatus();
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+﻿server:
+  port: 8088
+
+spring:
+  application:
+    name: research-agent
+  thymeleaf:
+    cache: false
+
+agent:
+  search:
+    # 搜索提供方：doubao | bocha
+    provider: doubao
+    doubao:
+      api-key: "${SEARCH_API_KEY:}"
+      timeout: 30s
+    bocha:
+      api-key: "${BOCHA_API_KEY:}"
+
+  budget:
+    # 以下为"兜底保险丝"：何时停止搜索由模型每轮自主判断（enough 字段），
+    # 护栏仅在模型失控（死循环/费用失控）时强制止损，正常调研不应被护栏截断
+    maxRounds: 8
+    maxSearchesPerRound: 6
+    maxTotalSearches: 30
+    minNewFindingsPerRound: 1
+    countPerSearch: 10
+    timeoutMinutes: 20
+
+  llm:
+    # 模型提供方：deepseek | openai-compatible | ollama（ollama 仅应急降级）
+    provider: deepseek
+    deepseek:
+      base-url: "https://api.deepseek.com"
+      api-key: "${DEEPSEEK_API_KEY:}"
+      model: "deepseek-flash"
+      temperature: 0.3
+    openai-compatible:
+      base-url: "https://ark.cn-beijing.volces.com/api/v3"
+      api-key: "${ARK_API_KEY:}"
+      model: "doubao-seed-1-6-flash-250428"
+      temperature: 0.3
+    ollama:
+      base-url: "http://localhost:11434"
+      model: "qwen3.5:2b"
+      temperature: 0.3
+
+  report:
+    # 报告落盘目录（learnkb 语料目录，实现知识回流）
+    output-dir: "F:\\learn\\ai转型计划个人学习\\research-agent调研报告"
+
+logging:
+  # 控制台输出用 GBK，配合 start.bat 的 cmd 窗口显示中文不乱码（IDEA 里看日志会乱码，属正常取舍）
+  charset:
+    console: GBK
+  level:
+    dev.langchain4j: INFO
+    com.research: DEBUG

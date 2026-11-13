@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行为数据 · 决策参谋</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" th:href="@{/css/theme.css}">
+</head>
+<body class="theme-paper min-h-screen flex flex-col">
+<div class="max-w-5xl mx-auto w-full px-4 py-8 flex-1">
+
+  <!-- ======== 顶栏 ======== -->
+  <header class="flex items-center gap-3 mb-7">
+    <a href="/" class="brand-mark" title="返回首页">决</a>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs" style="color: var(--faint);">决策参谋 · 行为数据</div>
+      <div class="text-sm" style="color: var(--muted);">喂真实行为记录，校准三档情景的乐观偏差（B 档修正依据）</div>
+    </div>
+    <a href="/history" class="btn-ghost btn-sm">历史</a>
+    <a href="/stats" class="btn-ghost btn-sm">统计</a>
+    <a href="/" class="btn-ghost btn-sm">返回首页</a>
+  </header>
+
+  <!-- ======== 四桶校准总览 ======== -->
+  <section class="mb-6">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+      <h2 class="text-sm font-semibold" style="color: var(--text);">分桶校准总览</h2>
+      <span class="text-xs" style="color: var(--faint);">完成率 = Σmin(实际,计划)/Σ计划 · ≥4 案起用真实数据 · 冷启动 0.7 · 超 6 个月未校准降权</span>
+    </div>
+    <div id="cal-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+  </section>
+
+  <!-- ======== 双入口：表单录入 / 粘贴导入 ======== -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+
+    <!-- ① 手填表单 -->
+    <div class="report-card">
+      <h3>① 手填录入</h3>
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs block mb-1.5" style="color: var(--faint);">问题类型（桶）</label>
+            <select id="form-type" class="field"></select>
+          </div>
+          <div>
+            <label class="text-xs block mb-1.5" style="color: var(--faint);">发生日期</label>
+            <input id="form-when" type="date" class="field">
+          </div>
+        </div>
+        <div>
+          <label class="text-xs block mb-1.5" style="color: var(--faint);">做了什么（标题）</label>
+          <input id="form-title" class="field" placeholder="例：完成 LangChain4j 入门课程">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs block mb-1.5" style="color: var(--faint);">计划值（小时/次数/量）</label>
+            <input id="form-planned" type="number" step="any" min="0" class="field" placeholder="例：20">
+          </div>
+          <div>
+            <label class="text-xs block mb-1.5" style="color: var(--faint);">实际值</label>
+            <input id="form-actual" type="number" step="any" min="0" class="field" placeholder="例：13">
+          </div>
+        </div>
+        <div class="flex items-center gap-5 flex-wrap">
+          <label class="flex items-center gap-2 text-xs cursor-pointer" style="color: var(--muted);">
+            <input id="form-completed" type="checkbox" class="accent-violet-500"> 整体已完成
+          </label>
+          <label class="flex items-center gap-2 text-xs cursor-pointer" style="color: var(--muted);" title="自评记录仅展示，不参与校准计算">
+            <input id="form-self" type="checkbox" class="accent-violet-500"> 这是主观自评
+            <span class="badge-assume">不参与校准</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-3 pt-1">
+          <button id="btn-form-save" class="btn-primary btn-sm">保存记录</button>
+          <span id="form-msg" class="text-xs" style="color: var(--faint);"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 粘贴文本导入 -->
+    <div class="report-card">
+      <h3>② 粘贴文本导入（LLM 提取 → 确认入库）</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs block mb-1.5" style="color: var(--faint);">导入到哪个桶</label>
+          <select id="import-type" class="field"></select>
+        </div>
+        <div>
+          <label class="text-xs block mb-1.5" style="color: var(--faint);">粘贴你的记录（周报/打卡/复盘文本均可）</label>
+          <textarea id="import-text" class="field" rows="4"
+            placeholder="例：上周计划学 10 小时英语，实际学了 6 小时；3 月跑步计划每周 3 次，实际平均每周 2 次，4 月初彻底停了。"></textarea>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="btn-extract" class="btn-primary btn-sm">LLM 提取预览</button>
+          <span id="import-msg" class="text-xs" style="color: var(--faint);">先预览、可修改，确认后才会入库</span>
+        </div>
+        <div id="extract-preview" class="hidden">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs" style="color: var(--muted);">提取结果（可修改，数值用于校准计算）</span>
+            <div class="flex gap-2">
+              <button id="btn-import" class="btn-primary btn-sm">确认导入</button>
+              <button id="btn-extract-cancel" class="btn-ghost btn-sm">放弃</button>
+            </div>
+          </div>
+          <div id="extract-rows" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== 记录列表 ======== -->
+  <section class="report-card">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+      <h3 class="!mb-0">行为记录</h3>
+      <div id="bucket-pills" class="flex flex-wrap gap-2"></div>
+    </div>
+    <div id="records-body" class="space-y-2.5"></div>
+  </section>
+</div>
+
+<footer class="pb-6 text-center">
+  <p class="text-xs" style="color: var(--faint);">校准系数只取真实行为（打卡/提交记录），自评数据仅展示不参与计算</p>
+</footer>
+
+<script th:src="@{/js/behavior.js}"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+﻿server:
+  port: 8090
+
+learnkb:
+  # 知识库语料目录：递归扫描 .md / .txt 文件
+  corpus-dir: "F:\\learn\\ai转型计划个人学习"
+  # 向量库持久化文件
+  store-file: "data/kb-store.json"
+  # 检索返回条数
+  top-k: 5
+  # 切块大小（token）与重叠
+  chunk-size: 400
+  chunk-overlap: 40
+
+  # Embedding 提供方：ollama | openai-compatible
+  embedding:
+    provider: ollama
+    ollama:
+      base-url: "http://127.0.0.1:11434"
+      model: "quentinz/bge-base-zh-v1.5:f16"
+    openai-compatible:
+      base-url: "https://api.siliconflow.cn/v1"
+      api-key: "${SILICONFLOW_API_KEY:}"
+      model: "BAAI/bge-m3"
+
+  # 对话模型提供方：ollama | deepseek | openai-compatible
+  # 切换 DeepSeek：provider 改 deepseek，api-key 填环境变量 DEEPSEEK_API_KEY 或直接写值
+  chat:
+    provider: deepseek
+    deepseek:
+      base-url: "https://api.deepseek.com"
+      api-key: "${DEEPSEEK_API_KEY:}"
+      model: "deepseek-flash"
+      temperature: 0.3
+    openai-compatible:
+      base-url: "https://ark.cn-beijing.volces.com/api/v3"
+      api-key: "${ARK_API_KEY:}"
+      model: "doubao-seed-1-6-flash-250428"
+      temperature: 0.3
+    ollama:
+      base-url: "http://127.0.0.1:11434"
+      model: "qwen2.5:7b-instruct-q4_K_M"
+      temperature: 0.2
+
+spring:
+  application:
+    name: learnkb-rag
+  servlet:
+    multipart:
+      max-file-size: 20MB
+
+logging:
+  # 控制台输出用 GBK，配合 start.bat 的 cmd 窗口显示中文不乱码（IDEA 里看日志会乱码，属正常取舍）
+  charset:
+    console: UTF-8
+  level:
+    dev.langchain4j: INFO
+    com.learnkb: DEBUG

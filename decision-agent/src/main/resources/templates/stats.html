@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>统计页 · 决策参谋</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" th:href="@{/css/theme.css}">
+</head>
+<body class="theme-paper min-h-screen flex flex-col">
+<div class="max-w-5xl mx-auto w-full px-4 py-8 flex-1">
+
+  <!-- ======== 顶栏 ======== -->
+  <header class="flex items-center gap-3 mb-7">
+    <a href="/" class="brand-mark" title="返回首页">决</a>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs" style="color: var(--faint);">决策参谋 · 统计页</div>
+      <div class="text-sm" style="color: var(--muted);">高频缺陷分布 · 行为完成率趋势 · 单次分析调用明细</div>
+    </div>
+    <a href="/history" class="btn-ghost btn-sm">历史</a>
+    <a href="/behavior" class="btn-ghost btn-sm">行为数据</a>
+  </header>
+
+  <!-- ======== ① 高频缺陷分布 ======== -->
+  <section class="stat-card mb-5">
+    <h3>高频缺陷分布
+      <span class="sub" id="issue-sub">红队质疑点关键词聚合（计数）</span>
+    </h3>
+    <div id="issue-bars" class="issue-bars"></div>
+  </section>
+
+  <!-- ======== ② 行为完成率趋势（分桶展示） ======== -->
+  <section class="stat-card mb-5">
+    <h3>行为完成率趋势
+      <span class="sub">分桶校准系数 · 按月的实际完成率（不含自评数据）</span>
+    </h3>
+    <div class="grid md:grid-cols-2 gap-5">
+      <div>
+        <div class="text-xs mb-2" style="color: var(--faint);">分桶校准系数（CalibrationService）</div>
+        <div id="bucket-grid" class="bucket-grid"></div>
+      </div>
+      <div>
+        <div class="text-xs mb-2" style="color: var(--faint);">月度完成率趋势</div>
+        <div id="trend-chart" class="trend-chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== ③ 红队体检（自审机制有效性） ======== -->
+  <section class="stat-card mb-5">
+    <h3>红队体检
+      <span class="sub">自审机制是否真的在对抗：轮次 / 收敛 / 空转 / 假修订 / 代码裁判贡献</span>
+    </h3>
+    <div id="redteam-health" class="bucket-grid"></div>
+  </section>
+
+  <!-- ======== ④ 单次分析调用明细 ======== -->
+  <section class="stat-card">
+    <h3>单次分析调用明细
+      <span class="sub">llm_trace：步骤 / token / 耗时 / 模板 hash</span>
+    </h3>
+    <div class="text-xs mb-3" style="color: var(--faint);">选择一次分析，查看该次模型调用序列（钱花在哪、哪个环节耗时）</div>
+    <div id="trace-picker" class="flex flex-wrap gap-2 mb-4"></div>
+    <div id="trace-panel"></div>
+  </section>
+</div>
+
+<script th:src="@{/js/stats.js}"></script>
+</body>
+</html>
